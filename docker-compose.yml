@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  workspace-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: workspace
+      POSTGRES_PASSWORD: workspace_password
+      POSTGRES_DB: workspace_crm
+    ports:
+      - "5434:5432" # Host port 5434 to avoid conflict with Twenty's DB or system DB
+    volumes:
+      - workspace_pgdata:/var/lib/postgresql/data
+
+  workspace-redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379" # Host port 6380 to avoid conflict with Twenty's Redis
+
+  # The FastAPI server (Workspace Engine)
+  # workspace-engine:
+  #   build: ./sync_engine
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     - workspace-db
+  #     - workspace-redis
+
+  # The MCP Server
+  # workspace-mcp:
+  #   build: ./mcp_server
+  #   ports:
+  #     - "8080:8080"
+  
+volumes:
+  workspace_pgdata:
