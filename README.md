@@ -28,7 +28,7 @@ Workspace consists of four main components interacting via a strict boundary:
 ### 1. Clone & Setup Environments
 
 ```bash
-git clone <your-repo-url> workspace-crm
+git clone https://github.com/aryan-internethuman/workspace-crm.git workspace-crm
 cd workspace-crm
 
 # Setup Python Virtual Environment for the backend services
