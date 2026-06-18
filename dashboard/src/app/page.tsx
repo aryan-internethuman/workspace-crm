@@ -1,228 +1,417 @@
 "use client";
 
-import React from 'react';
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  BarChart, Bar, AreaChart, Area
-} from 'recharts';
-import { 
-  Users, Activity, DollarSign, Target, 
-  AlertTriangle, CheckCircle, Clock, Zap, Bot, Mail, ShieldAlert
-} from 'lucide-react';
+import React, { useState, useEffect } from "react";
 
-const revenueData = [
-  { name: 'Mon', value: 4000 },
-  { name: 'Tue', value: 3000 },
-  { name: 'Wed', value: 6000 },
-  { name: 'Thu', value: 8000 },
-  { name: 'Fri', value: 12000 },
-  { name: 'Sat', value: 15000 },
-  { name: 'Sun', value: 18000 },
+// ── Mock Data ──────────────────────────────────────────
+
+const kpis = [
+  { label: "Active Leads", value: "142", trend: "+12", isPositive: true },
+  { label: "Open Opportunities", value: "38", trend: "+4", isPositive: true },
+  { label: "Awaiting Response", value: "9", trend: "-3", isPositive: false },
+  { label: "AI Influenced Rev", value: "₹2.4M", trend: "+18%", isPositive: true },
 ];
 
+interface ApiConversation {
+  id: string;
+  customer: string;
+  channel: string;
+  status: string;
+  intent: string | null;
+  assigned_to: string | null;
+  handler_type: string;
+  ai_paused: boolean;
+  updated_at: string;
+}
+
+const leads = [
+  { id: "L1", lead: "Sarah M.", company: "Acme Corp", stage: "Qualified", value: "₹50,000", lastAct: "2h ago", next: "Schedule Demo" },
+  { id: "L2", lead: "John Smith", company: "Wayne Enterprises", stage: "Proposal", value: "₹90,000", lastAct: "Yesterday", next: "Follow Up" },
+  { id: "L3", lead: "Emily Davis", company: "Stark Ind.", stage: "New", value: "₹30,000", lastAct: "4h ago", next: "Send Info" },
+  { id: "L4", lead: "Mike Chen", company: "Oscorp", stage: "Qualified", value: "₹75,000", lastAct: "1d ago", next: "Prepare Pitch" },
+  { id: "L5", lead: "Jessica Alba", company: "FutureTech", stage: "Won", value: "₹120,000", lastAct: "2d ago", next: "Onboarding" },
+];
+
+const pipelineStages = [
+  { name: "New", items: [
+      { id: 101, name: "Acme Corp", val: "₹50,000", lastAct: "2h ago" },
+      { id: 102, name: "Stark Ind.", val: "₹30,000", lastAct: "4h ago" },
+      { id: 103, name: "Wayne Ent.", val: "₹90,000", lastAct: "1d ago" },
+  ]},
+  { name: "Qualified", items: [
+      { id: 104, name: "Sarah M.", val: "₹75,000", lastAct: "3h ago" },
+      { id: 105, name: "LexCorp", val: "₹110,000", lastAct: "1d ago" },
+  ]},
+  { name: "Proposal", items: [
+      { id: 106, name: "Oscorp", val: "₹80,000", lastAct: "Yesterday" },
+      { id: 107, name: "FutureTech", val: "₹120,000", lastAct: "2d ago" },
+  ]},
+  { name: "Won", items: [
+      { id: 108, name: "Daily Planet", val: "₹200,000", lastAct: "Just now" },
+  ]},
+];
+
+const activities = [
+  { id: 1, action: "Recovered Cart", customer: "Sarah M.", outcome: "Purchase Completed", impact: "₹4,500 Recovered", time: "5 min ago" },
+  { id: 2, action: "Qualified Lead", customer: "John D.", outcome: "Moved To Qualified", impact: "Potential ₹12,000", time: "1 hour ago" },
+  { id: 3, action: "Escalated Support", customer: "LexCorp", outcome: "Human Review Required", impact: "Escalated Status", time: "2 hours ago" },
+  { id: 4, action: "Sent Welcome Sequence", customer: "Emily Davis", outcome: "Delivered", impact: "Sequence Started", time: "Yesterday" },
+];
+
+const insights = [
+  { id: "i1", title: "High Intent Buyer", target: "Sarah M.", stats: ["87% Purchase Probability", "Potential Revenue ₹75,000"], action: "Book Demo" },
+  { id: "i2", title: "Churn Risk Detected", target: "LexCorp", stats: ["Usage dropped 40%", "Revenue At Risk: ₹120,000"], action: "Schedule Call" },
+  { id: "i3", title: "Upsell Opportunity", target: "Wayne Enterprises", stats: ["Likely interested in Premium", "Potential Revenue ₹60,000"], action: "Send Offer" },
+];
+
+// ── Main Component ────────────────────────────────
 export default function Dashboard() {
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
-      {/* Background Gradients */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-600/20 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-violet-600/20 blur-[120px]" />
-      </div>
+  const [mounted, setMounted] = useState(false);
+  const [activeNav, setActiveNav] = useState("ih");
+  const [leadFilter, setLeadFilter] = useState("All");
+  const [conversations, setConversations] = useState<any[]>([]);
 
-      <div className="relative z-10 p-6 lg:p-10 max-w-7xl mx-auto space-y-8">
-        
-        {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/10">
-          <div>
-            <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-violet-400">
-              Workspace Founder
-            </h1>
-            <p className="text-slate-400 mt-1">White Gloves CRM Collaboration Layer</p>
+  useEffect(() => {
+    setMounted(true);
+    fetchConversations();
+    
+    // Connect to WebSocket for real-time updates
+    const ws = new WebSocket("ws://127.0.0.1:8000/ws/conversations");
+    ws.onmessage = (event) => {
+      if (event.data === "refresh") {
+        fetchConversations();
+      }
+    };
+    
+    return () => {
+      ws.close();
+    };
+  }, []);
+
+  const fetchConversations = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/conversations");
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data: ApiConversation[] = await res.json();
+      
+      const formatted = data.map(c => ({
+        id: c.id,
+        customer: c.customer,
+        channel: c.channel,
+        lastMsg: "...", // Not in DB yet
+        intent: c.intent || "Unknown",
+        status: c.handler_type === "human" ? "Human Handling" : "AI Handling",
+        owner: c.handler_type === "human" ? (c.assigned_to || "Human") : "Aanya",
+        lastAct: "Just now", // Simplification
+        canTakeover: c.handler_type === "ai"
+      }));
+      setConversations(formatted);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleTakeover = async (id: string) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/conversations/${id}/takeover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operator_id: "op_123" })
+      });
+      if (!res.ok) throw new Error("Failed to take over");
+      
+      // Update local state immediately for snappy UI
+      setConversations(prev => prev.map(c => 
+        c.id === id ? { ...c, status: "Human Handling", owner: "op_123", canTakeover: false } : c
+      ));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to take over conversation.");
+    }
+  };
+
+  const handleReturnToAi = async (id: string) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/conversations/${id}/return-to-ai`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operator_id: "op_123" })
+      });
+      if (!res.ok) throw new Error("Failed to return to AI");
+      
+      // Update local state immediately for snappy UI
+      setConversations(prev => prev.map(c => 
+        c.id === id ? { ...c, status: "AI Handling", owner: "Aanya", canTakeover: true } : c
+      ));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to return to AI.");
+    }
+  };
+
+  if (!mounted) return null;
+
+  return (
+    <div className="app-shell">
+      {/* ── SIDEBAR ────────────────────────────── */}
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <div className="sidebar-logo-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect width="14" height="14" rx="3" fill="var(--bg-surface)" />
+              <path d="M4 7h6M7 4v6" stroke="var(--text-primary)" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
-              <Bot className="w-5 h-5 text-indigo-400" />
-              <span className="text-sm font-medium">Aanya (Internet Human)</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-2" />
+          <div className="sidebar-logo-text">White Gloves</div>
+        </div>
+
+        <div className="sidebar-section-label">Main</div>
+        <div className={`sidebar-nav-item ${activeNav === "overview" ? "active" : ""}`} onClick={() => setActiveNav("overview")}>
+          <div className="sidebar-nav-left"><NavIcon id="overview" /> Workspace</div>
+        </div>
+        <div className={`sidebar-nav-item ${activeNav === "ih" ? "active" : ""}`} onClick={() => setActiveNav("ih")}>
+          <div className="sidebar-nav-left"><NavIcon id="ih" /> Internet Human</div>
+        </div>
+
+        <div className="sidebar-section-label">CRM Gateway</div>
+        <div className={`sidebar-nav-item ${activeNav === "conv" ? "active" : ""}`} onClick={() => setActiveNav("conv")}>
+          <div className="sidebar-nav-left"><NavIcon id="conv" /> Conversations</div>
+        </div>
+        <div className={`sidebar-nav-item ${activeNav === "pipeline" ? "active" : ""}`} onClick={() => setActiveNav("pipeline")}>
+          <div className="sidebar-nav-left"><NavIcon id="pipeline" /> Pipeline</div>
+        </div>
+        <div className={`sidebar-nav-item ${activeNav === "customers" ? "active" : ""}`} onClick={() => setActiveNav("customers")}>
+          <div className="sidebar-nav-left"><NavIcon id="customers" /> Customers</div>
+        </div>
+
+        <div className="sidebar-section-label">System</div>
+        <div className="sidebar-nav-item"><div className="sidebar-nav-left"><NavIcon id="settings" /> Settings</div></div>
+
+        <div className="sidebar-footer">
+          <div className="sidebar-user">
+            <div className="sidebar-user-avatar">O</div>
+            <div className="sidebar-user-info">
+              <div className="sidebar-user-name">Operator Name</div>
+              <div className="sidebar-user-email">aryan@internethuman.co</div>
             </div>
           </div>
-        </header>
+        </div>
+      </aside>
 
-        {/* Overview Metrics */}
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <MetricCard 
-            title="Revenue Recovered" 
-            value="₹40,000" 
-            icon={<DollarSign className="w-5 h-5 text-emerald-400" />} 
-            trend="+12%" 
-          />
-          <MetricCard 
-            title="Total Customers" 
-            value="1,248" 
-            icon={<Users className="w-5 h-5 text-indigo-400" />} 
-            trend="+5%" 
-          />
-          <MetricCard 
-            title="Open Escalations" 
-            value="12" 
-            icon={<AlertTriangle className="w-5 h-5 text-amber-400" />} 
-            trend="-2" 
-          />
-          <MetricCard 
-            title="Campaign ROI" 
-            value="340%" 
-            icon={<Target className="w-5 h-5 text-violet-400" />} 
-            trend="+18%" 
-          />
-        </section>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ── MAIN AREA ─────────────────────────── */}
+      <div className="main-area">
+        <div className="main-scroll">
           
-          {/* Main Chart */}
-          <div className="lg:col-span-2 p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md shadow-xl transition-all duration-300 hover:bg-white/[0.07]">
-            <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-indigo-400" /> Revenue Recovery Trend
-            </h2>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueData}>
-                  <defs>
-                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val/1000}k`} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }}
-                    itemStyle={{ color: '#e2e8f0' }}
-                  />
-                  <Area type="monotone" dataKey="value" stroke="#818cf8" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+          {/* 1. Header & KPIs */}
+          <div style={{ marginBottom: "40px" }}>
+            <h1 className="page-title">Workspace</h1>
+            <p className="page-desc">Your Internet Human is actively handling conversations and qualifying leads.</p>
           </div>
 
-          {/* Internet Human Activity */}
-          <div className="p-6 rounded-2xl bg-indigo-950/30 border border-indigo-500/20 backdrop-blur-md shadow-xl transition-all duration-300 hover:border-indigo-500/40">
-            <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
-              <Bot className="w-5 h-5 text-indigo-400" /> Aanya's Activity
-            </h2>
-            <div className="space-y-4">
-              <ActivityItem 
-                icon={<CheckCircle className="text-emerald-400" />} 
-                title="Recovered Cart #9201" 
-                time="10 mins ago" 
-              />
-              <ActivityItem 
-                icon={<Mail className="text-violet-400" />} 
-                title="Sent Welcome Campaign" 
-                time="1 hr ago" 
-              />
-              <ActivityItem 
-                icon={<ShieldAlert className="text-amber-400" />} 
-                title="Escalated RTO Risk #110" 
-                time="2 hrs ago" 
-              />
-              <ActivityItem 
-                icon={<Clock className="text-indigo-400" />} 
-                title="Followed up on #9112" 
-                time="4 hrs ago" 
-              />
-            </div>
-            <button className="mt-6 w-full py-2 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 transition border border-indigo-500/30 font-medium text-sm">
-              View All Tasks
-            </button>
-          </div>
-        </div>
-
-        {/* Secondary Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Customer Health */}
-          <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md shadow-xl">
-            <h2 className="text-lg font-semibold mb-6">Customer Health</h2>
-            <div className="space-y-4">
-              <HealthRow label="Active Customers" value="85%" color="bg-emerald-500" />
-              <HealthRow label="At Risk Customers" value="10%" color="bg-amber-500" />
-              <HealthRow label="Churn Risk" value="5%" color="bg-red-500" />
-              <HealthRow label="Repeat Purchase Rate" value="42%" color="bg-indigo-500" />
-            </div>
-          </div>
-
-          {/* Campaign Performance */}
-          <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md shadow-xl">
-            <h2 className="text-lg font-semibold mb-6">Campaign Performance</h2>
-            <div className="space-y-5">
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-sm text-slate-400">Total Revenue</p>
-                  <p className="text-2xl font-bold text-white">₹1,24,500</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-slate-400">Conversion Rate</p>
-                  <p className="text-2xl font-bold text-emerald-400">12.4%</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "48px" }}>
+            {kpis.map((m) => (
+              <div key={m.label} className="card" style={{ padding: "16px 20px" }}>
+                <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "8px" }}>{m.label}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "12px" }}>
+                  <div style={{ fontSize: "24px", fontWeight: "600", color: "var(--text-primary)" }}>{m.value}</div>
                 </div>
               </div>
-              <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden flex">
-                <div className="h-full bg-indigo-500 w-[60%]"></div>
-                <div className="h-full bg-violet-500 w-[40%]"></div>
-              </div>
-              <p className="text-xs text-slate-400 flex justify-between">
-                <span>WhatsApp (60%)</span>
-                <span>Email (40%)</span>
-              </p>
+            ))}
+          </div>
+
+          {/* 2. Active Conversations */}
+          <div style={{ marginBottom: "48px" }}>
+            <h2 className="sec-head">Active Conversations</h2>
+            <div className="card table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th>Channel</th>
+                    <th>Last Message</th>
+                    <th>Intent</th>
+                    <th>Status</th>
+                    <th>Assigned To</th>
+                    <th>Last Activity</th>
+                    <th style={{ textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {conversations.map((c) => (
+                    <tr key={c.id}>
+                      <td className="font-medium">{c.customer}</td>
+                      <td>{c.channel}</td>
+                      <td style={{ color: "var(--text-secondary)" }}>{c.lastMsg}</td>
+                      <td>{c.intent}</td>
+                      <td><span className={`tag ${c.status === "Human Handling" ? "human" : "ai"}`}>{c.status}</span></td>
+                      <td>{c.owner}</td>
+                      <td className="text-muted">{c.lastAct}</td>
+                      <td style={{ textAlign: "right" }}>
+                        {c.canTakeover ? (
+                          <button className="btn btn-secondary" onClick={() => handleTakeover(c.id)}>Take Over</button>
+                        ) : (
+                          <button className="btn btn-secondary" onClick={() => handleReturnToAi(c.id)} style={{ color: "var(--text-primary)", border: "1px solid var(--border)" }}>Return to AI</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
+
+          {/* 3. Lead Management */}
+          <div style={{ marginBottom: "48px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h2 className="sec-head" style={{ marginBottom: 0 }}>Leads Requiring Attention</h2>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {["All", "Qualified", "Proposal", "Won"].map(f => (
+                  <button key={f} 
+                          onClick={() => setLeadFilter(f)}
+                          style={{ 
+                            padding: "6px 12px", fontSize: "13px", fontWeight: "500", borderRadius: "6px", cursor: "pointer",
+                            background: leadFilter === f ? "var(--bg-surface)" : "transparent", 
+                            color: leadFilter === f ? "var(--text-primary)" : "var(--text-secondary)", 
+                            border: leadFilter === f ? "1px solid var(--border)" : "1px solid transparent",
+                            boxShadow: leadFilter === f ? "var(--shadow-sm)" : "none"
+                          }}>
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="card table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Lead</th>
+                    <th>Company</th>
+                    <th>Stage</th>
+                    <th>Value</th>
+                    <th>Last Activity</th>
+                    <th style={{ textAlign: "right" }}>Next Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leads.filter(l => leadFilter === "All" || l.stage === leadFilter).map((l) => (
+                    <tr key={l.id}>
+                      <td className="font-medium">{l.lead}</td>
+                      <td>{l.company}</td>
+                      <td><span className="tag">{l.stage}</span></td>
+                      <td className="font-medium">{l.value}</td>
+                      <td className="text-muted">{l.lastAct}</td>
+                      <td style={{ textAlign: "right" }}><button className="btn btn-secondary">{l.next}</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 4. Active Pipeline */}
+          <div style={{ marginBottom: "48px" }}>
+            <h2 className="sec-head">Active Pipeline</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              {pipelineStages.map((stage) => (
+                <div key={stage.name} className="pipeline-col">
+                  <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>
+                    {stage.name} <span style={{ float: "right", color: "var(--text-muted)" }}>{stage.items.length}</span>
+                  </div>
+                  {stage.items.map(item => (
+                    <div key={item.id} className="pipeline-card">
+                       <div style={{ fontSize: "14px", fontWeight: "500", color: "var(--text-primary)", marginBottom: "8px" }}>{item.name}</div>
+                       <div style={{ fontSize: "16px", fontWeight: "600", color: "var(--text-primary)", marginBottom: "12px" }}>{item.val}</div>
+                       <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>{item.lastAct}</div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 5. Two Columns: Activity & Actions */}
+          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "32px", marginBottom: "48px" }}>
+            
+            {/* Activity Feed */}
+            <div>
+              <h2 className="sec-head">Aanya's Recent Activity</h2>
+              <div className="card" style={{ padding: "24px" }}>
+                {activities.map((item, idx) => (
+                  <div key={item.id} className="timeline-item">
+                    <div className="timeline-dot" />
+                    <div style={{ flex: 1, paddingBottom: idx === activities.length - 1 ? 0 : 24 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                        <span style={{ fontSize: "14px", fontWeight: "500", color: "var(--text-primary)" }}>{item.action}</span>
+                        <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{item.time}</span>
+                      </div>
+                      <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "12px" }}>Customer: {item.customer}</div>
+                      
+                      <div style={{ display: "flex", gap: "16px", background: "var(--bg-app)", padding: "12px", borderRadius: "6px" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: "11px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "4px", fontWeight: "500" }}>Outcome</div>
+                          <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>{item.outcome}</div>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: "11px", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "4px", fontWeight: "500" }}>Impact</div>
+                          <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>{item.impact}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recommended Actions */}
+            <div>
+              <h2 className="sec-head">Recommended Actions</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {insights.map(i => (
+                  <div key={i.id} className="card" style={{ padding: "20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-secondary)" }}>
+                        <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+                      </svg>
+                      <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-primary)" }}>{i.title}</span>
+                    </div>
+                    <div style={{ fontSize: "14px", color: "var(--text-secondary)", marginBottom: "16px" }}>Customer: <span style={{ color: "var(--text-primary)", fontWeight: "500" }}>{i.target}</span></div>
+                    
+                    <ul style={{ listStyle: "none", padding: 0, margin: "0 0 20px 0", display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {i.stats.map((s, idx) => (
+                        <li key={idx} style={{ fontSize: "13px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--text-muted)" }} />
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                    
+                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: "500" }}>RECOMMENDED ACTION</span>
+                      <button className="btn btn-primary">{i.action}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+
         </div>
-
       </div>
     </div>
   );
 }
 
-// Subcomponents
-function MetricCard({ title, value, icon, trend }: { title: string, value: string, icon: React.ReactNode, trend: string }) {
-  const isPositive = trend.startsWith('+');
-  return (
-    <div className="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md shadow-xl hover:bg-white/10 transition group cursor-default">
-      <div className="flex justify-between items-start mb-4">
-        <div className="p-2 rounded-lg bg-white/5 group-hover:scale-110 transition-transform">
-          {icon}
-        </div>
-        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${isPositive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-          {trend}
-        </span>
-      </div>
-      <h3 className="text-slate-400 text-sm font-medium">{title}</h3>
-      <p className="text-2xl font-bold text-white mt-1">{value}</p>
-    </div>
-  );
-}
-
-function ActivityItem({ icon, title, time }: { icon: React.ReactElement<{className?: string}>, title: string, time: string }) {
-  return (
-    <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-        {React.cloneElement(icon, { className: "w-4 h-4" })}
-      </div>
-      <div className="flex-1">
-        <p className="text-sm font-medium text-slate-200">{title}</p>
-        <p className="text-xs text-slate-400">{time}</p>
-      </div>
-    </div>
-  );
-}
-
-function HealthRow({ label, value, color }: { label: string, value: string, color: string }) {
-  return (
-    <div className="flex items-center gap-4">
-      <div className="w-32 text-sm text-slate-300">{label}</div>
-      <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-        <div className={`h-full ${color}`} style={{ width: value }}></div>
-      </div>
-      <div className="w-12 text-right text-sm font-medium">{value}</div>
-    </div>
-  );
+// ── Icon helpers ──────────────────────────────────
+function NavIcon({ id }: { id: string }) {
+  const s = { width: 16, height: 16, style: { flexShrink: 0 } };
+  const icons: Record<string, React.ReactNode> = {
+    overview: <svg {...s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
+    ih:       <svg {...s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a7 7 0 0113 0"/><circle cx="19" cy="5" r="3" fill="currentColor" stroke="none"/></svg>,
+    conv:     <svg {...s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013 6.18a2 2 0 012-2.18h3"/></svg>,
+    pipeline: <svg {...s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
+    customers:<svg {...s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
+    settings: <svg {...s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
+  };
+  return (icons[id] || <span style={{ width: 16, flexShrink: 0 }} />) as React.ReactElement;
 }

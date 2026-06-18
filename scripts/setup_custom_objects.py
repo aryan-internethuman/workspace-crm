@@ -15,6 +15,21 @@ def setup_custom_objects():
 
     custom_objects = [
         {
+            "nameSingular": "Conversation",
+            "namePlural": "Conversations",
+            "labelSingular": "Conversation",
+            "labelPlural": "Conversations",
+            "fields": [
+                {"name": "customer", "type": "TEXT"},
+                {"name": "channel", "type": "TEXT"},
+                {"name": "status", "type": "TEXT"},
+                {"name": "intent", "type": "TEXT"},
+                {"name": "assigned_to", "type": "TEXT"},
+                {"name": "handler_type", "type": "TEXT"},
+                {"name": "ai_paused", "type": "BOOLEAN"}
+            ]
+        },
+        {
             "nameSingular": "Customer",
             "namePlural": "Customers",
             "labelSingular": "Customer",

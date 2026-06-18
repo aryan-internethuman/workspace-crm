@@ -1,5 +1,6 @@
 import os
 import sys
+import requests
 from dotenv import load_dotenv
 load_dotenv()
 from fastapi import FastAPI, Request
@@ -44,6 +45,15 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {"customer_id": {"type": "string"}},
                 "required": ["customer_id"]
+            }
+        ),
+        Tool(
+            name="check_conversation_status",
+            description="Check if a conversation is paused or handled by a human",
+            inputSchema={
+                "type": "object",
+                "properties": {"conversation_id": {"type": "string"}},
+                "required": ["conversation_id"]
             }
         ),
         Tool(
@@ -106,6 +116,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         elif name == "get_customer":
             results = client._get(f"/customers/{arguments['customer_id']}")
             return [TextContent(type="text", text=str(results))]
+            
+        elif name == "check_conversation_status":
+            conv_id = arguments["conversation_id"]
+            try:
+                # Query the sync engine API (running on port 8000)
+                res = requests.get(f"http://127.0.0.1:8000/api/conversations/{conv_id}")
+                if res.status_code == 200:
+                    data = res.json()
+                    status_text = f"Conversation {conv_id} - ai_paused: {data.get('ai_paused')}, handler_type: {data.get('handler_type')}, assigned_to: {data.get('assigned_to')}"
+                    return [TextContent(type="text", text=status_text)]
+                elif res.status_code == 404:
+                    return [TextContent(type="text", text=f"Conversation {conv_id} not found in database.")]
+                else:
+                    return [TextContent(type="text", text=f"Failed to fetch status: HTTP {res.status_code}")]
+            except Exception as e:
+                return [TextContent(type="text", text=f"Error connecting to Sync Engine API: {str(e)}")]
             
         elif name == "create_task":
             task_data = {"title": arguments["title"]}
